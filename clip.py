@@ -17,6 +17,7 @@ BYTESIZE = 1 << 12
 RECEIVE_TIMEOUT = 0.5
 RECEIVE_TIMER = 0.1
 
+# Detect if it's host or guest
 if sys.argv[1] == "host":
   isHost = True
 elif sys.argv[1] == "guest":
@@ -27,27 +28,33 @@ else:
 
 otherString = "guest" if isHost else "host"
 
+# Argument parser
 parser =  argparse.ArgumentParser()
 parser.add_argument('-a', dest='address', type=str, default=ADDR, nargs='?')
 parser.add_argument('-p', dest='port', type=int, default=PORT, nargs='?')
 parser.add_argument('-b', dest='bytesize', type=int, default=BYTESIZE, nargs='?')
 args = vars(parser.parse_args(sys.argv[2:]))
 
+# useful globals
 inbound = outbound = None
 justReceived = False
-validTypes = [""]
 
+# Qt Gui Application for reading and writing to the clipboard
 app = QGuiApplication([])
 
+# this function will monitor changes in the clipboard
 def clipboardChanged():
   global outbound, justReceived
 
+  # clipboard changed because we received an update from host/guest
   if justReceived:
     justReceived = False
     return
   
+  # read the clipboard
   readClip = app.clipboard().mimeData()
 
+  # dict to store elements of the clipboard
   clipObj = {
     'image': None,
     'html': None,
@@ -55,6 +62,8 @@ def clipboardChanged():
   }
 
   if readClip.hasImage():
+    # we can only send bytes-like objects. store the image in a byte array
+    # and encode it in base 64
     byteArray = QtCore.QByteArray()
     buffer = QtCore.QBuffer(byteArray)
     buffer.open(QtCore.QIODevice.WriteOnly)
@@ -68,6 +77,7 @@ def clipboardChanged():
     clipObj['text'] = readClip.text()
 
   if all(val is None for val in clipObj):
+    # maybe add support for more data types? color, urls..
     print("Clipboard changed but no data type is supported")
     return
 
@@ -77,16 +87,19 @@ def clipboardChanged():
   ))
 
   serialized = base64.b64encode(pickle.dumps(clipObj)).decode('utf-8')
+  # store information in the outbound global so the looping function will send it
   outbound = ("{}:{}".format(len(serialized), serialized)).encode('utf-8')
 
 def checkInbound():
   global inbound, justReceived
 
+  # check if we have received data from the host/guest
   if inbound is None:
     return
 
   data = inbound
   inbound = None
+
 
   clipObj = pickle.loads(base64.b64decode(data))
   mimeData = QtCore.QMimeData()
@@ -96,6 +109,7 @@ def checkInbound():
     str(dataTypes)[1:-1], otherString))
 
   if 'image' in dataTypes:
+    # we need to decode the image and get it from the bytearray
     byteArray = base64.b64decode(clipObj['image'].encode('utf-8'))
     image = QImage()
     image.loadFromData(byteArray, "PNG")
@@ -108,7 +122,7 @@ def checkInbound():
     mimeData.setText(clipObj['text'])
     
   justReceived = True
-  app.clipboard().setMimeData(mimeData)
+  app.clipboard().setMimeData(mimeData) # update the clipboard
 
 def exitHandler(sig = None, frame = None, conn = None):
   if conn is not None:
@@ -121,15 +135,19 @@ def loop(conn):
   global inbound, outbound
 
   while True:
+    # check if host/guest has sent data
     readable, _, _ = select.select([conn], [], [], RECEIVE_TIMEOUT)
 
     if not readable:
+      # as the host/guest didn't receive data, we check if there's any
+      # information in the outbound global and send it (clipboard changed)
       if outbound is not None:
         conn.sendall(outbound)
         outbound = None
       
       continue
 
+   # some helper variables
     receiving = False
     size = 0
     buffer = ''
@@ -143,13 +161,19 @@ def loop(conn):
         exitHandler(conn=conn)
       
       if receiving:
+        # we have started to receive data
         buffer += decodedData
 
         if len(buffer) >= size:
+          # we have finished to receive data, time to put it in the inbound
+          # global
           inbound = buffer.encode('utf-8')
           break
       else:
         if ':' in decodedData:
+          # format of every message between the host and guest
+          # size:data
+          # we look for the colon to know how long every message is
           size = int(decodedData.split(':', 1)[0])
           buffer = decodedData.split(':', 1)[1]
 
@@ -163,6 +187,8 @@ def loop(conn):
           break
 
 def host():
+  # host needs to initialize the server, wait for the guest and then go into
+  # the loop
   serv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
   serv.bind((args['address'], args['port']))
   serv.listen()
@@ -176,35 +202,26 @@ def host():
     loop(conn)
 
 def guest():
+  # guest needs to connect to the server and then go into the loop
   serv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
   serv.connect((args['address'], args['port']))
 
   print("Established connection with {}".format(otherString))
   loop(serv)
 
+# every time clipboard changes, clipboardChanged() will be called
 app.clipboard().dataChanged.connect(clipboardChanged)
 
+# we need to call host() or guest(), it needs to run on a separate thread
+# so it will not hang the entire main thread
 loopThread = threading.Thread(target=host if isHost else guest, daemon=True)
 loopThread.start()
 
+# this timer will trigger checkInbound periodically
 timer = QtCore.QTimer()
 timer.timeout.connect(checkInbound)
 timer.start(int(RECEIVE_TIMER * 1000))
 
+# run exitHandler on SIGINT and start the QGuiApplication loop
 signal.signal(signal.SIGINT, exitHandler)
-
 app.exec_()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
