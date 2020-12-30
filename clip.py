@@ -18,6 +18,10 @@ RECEIVE_TIMEOUT = 0.5
 RECEIVE_TIMER = 0.1
 
 # Detect if it's host or guest
+if len(sys.argv) < 2:
+  print("Please indicate if guest or host")
+  sys.exit(1)
+  
 if sys.argv[1] == "host":
   isHost = True
 elif sys.argv[1] == "guest":
@@ -25,7 +29,7 @@ elif sys.argv[1] == "guest":
 else:
   print("Please indicate if guest or host")
   sys.exit(1)
-
+    
 otherString = "guest" if isHost else "host"
 
 # Argument parser
