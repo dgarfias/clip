@@ -17,27 +17,25 @@ BYTESIZE = 1 << 12
 RECEIVE_TIMEOUT = 0.5
 RECEIVE_TIMER = 0.1
 
-# Detect if it's host or guest
-if len(sys.argv) < 2:
-  print("Please indicate if guest or host")
-  sys.exit(1)
-  
-if sys.argv[1] == "host":
-  isHost = True
-elif sys.argv[1] == "guest":
-  isHost = False
-else:
-  print("Please indicate if guest or host")
-  sys.exit(1)
-    
-otherString = "guest" if isHost else "host"
 
 # Argument parser
-parser =  argparse.ArgumentParser()
-parser.add_argument('-a', dest='address', type=str, default=ADDR, nargs='?')
-parser.add_argument('-p', dest='port', type=int, default=PORT, nargs='?')
-parser.add_argument('-b', dest='bytesize', type=int, default=BYTESIZE, nargs='?')
-args = vars(parser.parse_args(sys.argv[2:]))
+parser =  argparse.ArgumentParser(prog='clip', 
+  description='Simple script to synchronize clipboard between host and guest.')
+parser.add_argument('-a', '--address', dest='address', type=str, default=ADDR,
+  nargs=1, help='IP address of the host (default: %(default)s)')
+parser.add_argument('-p', '--port', dest='port', type=int, default=PORT, 
+  nargs=1, help='Port (default: %(default)s)')
+parser.add_argument('-b', '--bytesize', dest='bytesize', metavar="BYTES", 
+  type=int, default=BYTESIZE, nargs=1, help='Bytesize (default: %(default)s)')
+parser.add_argument('-o', '--host', dest='isHost', action='store_const', 
+default=False, const=True, help='Run script as host (guest selected by default)')
+args = vars(parser.parse_args(sys.argv[1:]))
+
+for key in args:
+  if type(args[key]) is list:
+    args[key] = args[key][0]
+
+otherString = "guest" if args['isHost'] else "host"
 
 # useful globals
 inbound = outbound = None
@@ -218,7 +216,7 @@ app.clipboard().dataChanged.connect(clipboardChanged)
 
 # we need to call host() or guest(), it needs to run on a separate thread
 # so it will not hang the entire main thread
-loopThread = threading.Thread(target=host if isHost else guest, daemon=True)
+loopThread = threading.Thread(target=host if args['isHost']else guest, daemon=True)
 loopThread.start()
 
 # this timer will trigger checkInbound periodically

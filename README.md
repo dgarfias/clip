@@ -1,13 +1,15 @@
 # clip
 
-Simple script to synchronize clipboard between a host and a guest. 
+usage: clip [-h] [-a ADDRESS] [-p PORT] [-b BYTES] [-o]
 
-Usage: ``python clip.py <host/guest> [opts]``
+Simple script to synchronize clipboard between host and guest.
 
-available options:
+optional arguments:
+  -h, --help            show this help message and exit
+  -a ADDRESS, --address ADDRESS
+                        IP address of the host (default: 127.0.0.1)
+  -p PORT, --port PORT  Port (default: 12000)
+  -b BYTES, --bytesize BYTES
+                        Bytesize (default: 4096)
+  -o, --host            Run script as host (guest selected by default)
 
-  \-a      IP address of the host (default: 127.0.0.1)
-  
-  \-p      port (default: 12000)
-  
-  \-b      bytesize (default: 4096)
