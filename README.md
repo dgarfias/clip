@@ -5,6 +5,7 @@ usage: clip [-h] [-a ADDRESS] [-p PORT] [-b BYTES] [-o]
 Simple script to synchronize clipboard between host and guest.
 
 optional arguments:
+
   \-h, --help            show this help message and exit
   
   \-a ADDRESS, --address ADDRESS
